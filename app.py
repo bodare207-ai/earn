@@ -62,7 +62,7 @@ if st.session_state.user is None:
 st.sidebar.title(f"👤 {st.session_state.user}")
 st.sidebar.metric("Coins", f"{st.session_state.coins} 🥭")
 
-# Capture Redirect Back
+# Capture Ad Verification
 if st.query_params.get("verified") == "true":
     st.session_state.coins += 10
     save_user_data(st.session_state.user, "", st.session_state.coins)
@@ -73,19 +73,19 @@ if st.query_params.get("verified") == "true":
 tab_game, tab_draw = st.tabs(["🎮 Play Game", "🏦 Withdraw"])
 
 with tab_game:
-    # THE GAME COMPONENT (TELEPORT FIX)
+    # THE GAME COMPONENT (TOP-LEVEL REDIRECT FIX)
     game_html = """
     <div id="game" style="width:100%; height:350px; background:#e0f2fe; position:relative; overflow:hidden; border-radius:15px; border:3px solid #0369a1;">
         <div id="basket" style="width:75px; height:25px; background:#451a03; position:absolute; bottom:10px; left:50%; border-radius:5px;"></div>
         <div id="score" style="position:absolute; top:10px; left:10px; font-weight:bold; font-size:20px; color:#0369a1;">Score: 0</div>
-        <div id="msg" style="position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); font-size:30px; font-weight:bold; display:none; color:red; text-align:center;"></div>
+        <div id="status_msg" style="position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); font-size:24px; font-weight:bold; display:none; background:rgba(255,255,255,0.8); padding:20px; border-radius:10px; text-align:center; z-index:100;"></div>
     </div>
     <script>
         let s = 0; let m = 0;
         const g = document.getElementById('game');
         const b = document.getElementById('basket');
         const sc = document.getElementById('score');
-        const msg = document.getElementById('msg');
+        const status = document.getElementById('status_msg');
         const lobby = "https://merry-peony-d69278.netlify.app/";
 
         window.addEventListener('mousemove', (e) => {
@@ -112,17 +112,21 @@ with tab_game:
                     s++; sc.innerText = "Score: " + s;
                     mango.remove(); clearInterval(fall);
                     if(s >= 10) { 
-                        msg.innerText = "WIN! Teleporting...";
-                        msg.style.display = "block";
-                        setTimeout(() => { window.parent.location.href = lobby; }, 1000);
+                        status.innerText = "WIN! Teleporting to Lobby...";
+                        status.style.display = "block";
+                        status.style.color = "green";
+                        // BREAKOUT FIX
+                        setTimeout(() => { window.top.location.href = lobby; }, 1200);
                     }
                 }
                 if(t > 330) {
                     m++; mango.remove(); clearInterval(fall);
                     if(m >= 3) { 
-                        msg.innerText = "FAILED! Redirecting...";
-                        msg.style.display = "block";
-                        setTimeout(() => { window.parent.location.href = lobby; }, 1000);
+                        status.innerText = "FAILED! Redirecting...";
+                        status.style.display = "block";
+                        status.style.color = "red";
+                        // BREAKOUT FIX
+                        setTimeout(() => { window.top.location.href = lobby; }, 1200);
                     }
                 }
             }, 30);
@@ -133,10 +137,10 @@ with tab_game:
     components.html(game_html, height=400)
 
 with tab_draw:
-    st.header("Withdraw")
+    st.header("Withdrawal")
     if st.button("Redeem ₹10 (480 Coins)"):
         if st.session_state.coins >= 480:
-            st.warning("⏳ Please wait 2 minutes for processing...")
+            st.warning("⏳ Order processing... Wait 2 minutes.")
             p = st.progress(0)
             for i in range(120):
                 time.sleep(1)
