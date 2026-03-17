@@ -6,33 +6,34 @@ import string
 
 st.set_page_config(page_title="Mango Wallet", page_icon="🥭")
 
-# --- INITIALIZE STATE ---
+# --- COIN LOGIC ---
 if 'coins' not in st.session_state: st.session_state.coins = 0
-if 'queue_active' not in st.session_state: st.session_state.queue_active = False
+if 'in_queue' not in st.session_state: st.session_state.in_queue = False
 
-# 1. VERIFICATION CHECK: Adds coins only if coming from Netlify
-if st.query_params.get("verified") == "true":
+# Capture teleport from Netlify and add coins
+params = st.query_params
+if params.get("add_coins") == "true":
     st.session_state.coins += 10
-    st.query_params.clear() 
-    st.success("💰 +10 Coins added! Your verification was successful.")
+    st.query_params.clear() # Clear URL so refresh doesn't add more coins
+    st.toast("💰 10 Coins added to your wallet!")
 
-tab1, tab2 = st.tabs(["🎮 Play Mango", "🏦 Withdraw"])
+tab1, tab2 = st.tabs(["🎮 Play Game", "🏦 Withdraw"])
 
 with tab1:
     st.header("Mango Challenge")
     
-    # Game code with improved redirection
+    # Very slow mangoes + Auto-teleport logic
     game_js = """
-    <div id="g" style="width:100%; height:300px; background:#e0f2fe; position:relative; overflow:hidden; border-radius:15px;">
-        <div id="b" style="width:60px; height:20px; background:#451a03; position:absolute; bottom:5px; left:50%;"></div>
-        <div id="score" style="position:absolute; top:10px; left:10px; font-weight:bold; color:#0369a1;">Score: 0</div>
+    <div id="g" style="width:100%; height:300px; background:#e0f2fe; position:relative; overflow:hidden; border-radius:15px; border:2px solid #0369a1;">
+        <div id="b" style="width:60px; height:20px; background:#451a03; position:absolute; bottom:5px; left:50%; border-radius:5px;"></div>
+        <div id="sc" style="position:absolute; top:10px; left:10px; font-weight:bold; color:#0369a1;">Score: 0</div>
     </div>
     <script>
         let s = 0; let m = 0;
         const g = document.getElementById('g');
         const b = document.getElementById('b');
-        const sc = document.getElementById('score');
-        const lobby = "https://merry-peony-d69278.netlify.app/";
+        const sc = document.getElementById('sc');
+        const lobbyURL = "https://merry-peony-d69278.netlify.app/";
 
         window.addEventListener('mousemove', (e) => {
             let r = g.getBoundingClientRect();
@@ -48,20 +49,21 @@ with tab1:
 
             let fall = setInterval(() => {
                 let t = parseInt(mango.style.top);
-                mango.style.top = (t + 3) + "px"; // Slow speed as requested
+                mango.style.top = (t + 3) + "px"; // VERY SLOW
                 
+                // Hit Logic
                 if(t > 270 && Math.abs(parseInt(mango.style.left) - parseInt(b.style.left)) < 50) {
                     s++; sc.innerText = "Score: " + s;
                     mango.remove(); clearInterval(fall);
                     if(s >= 10) { 
                         alert("WIN! Redirecting to Ad Lobby..."); 
-                        window.parent.location.href = lobby; 
+                        window.parent.location.href = lobbyURL; 
                     }
                 } else if(t > 300) {
                     m++; mango.remove(); clearInterval(fall);
                     if(m >= 3) { 
-                        alert("GAME OVER! Watch ad to retry."); 
-                        window.parent.location.href = lobby; 
+                        alert("FAILED! Redirecting to Lobby..."); 
+                        window.parent.location.href = lobbyURL; 
                     }
                 }
             }, 30);
@@ -72,26 +74,27 @@ with tab1:
     components.html(game_js, height=350)
 
 with tab2:
-    st.header("Withdrawal")
+    st.header("Withdrawal Settings")
     st.metric("Balance", f"{st.session_state.coins} 🥭")
     
-    option = st.selectbox("Select Option", ["Redeem Code", "UPI", "GPay"])
+    withdraw_type = st.selectbox("Choose Method", ["Redeem Code", "UPI Cash Out"])
     
     if st.button("Claim Reward (480 Coins)"):
         if st.session_state.coins < 480:
-            st.error("Not enough coins! You need 480.")
+            st.error("Insufficient Balance. You need 480 Coins.")
         else:
-            st.session_state.queue_active = True
-            
-    if st.session_state.queue_active:
-        st.warning("⏳ Order in Queue... Please wait 2 minutes for your code.")
-        bar = st.progress(0)
-        for i in range(120):
+            st.session_state.in_queue = True
+
+    if st.session_state.in_queue:
+        st.warning("⏳ Order in Queue... Generating code in 2 minutes.")
+        progress = st.progress(0)
+        for i in range(120): # 120 seconds
             time.sleep(1)
-            bar.progress((i + 1) / 120)
+            progress.progress((i + 1) / 120)
         
-        # Generate Code
-        new_code = '-'.join([''.join(random.choices(string.ascii_uppercase + string.digits, k=4)) for _ in range(4)])
+        # Generation Logic
+        code = '-'.join([''.join(random.choices(string.ascii_uppercase + string.digits, k=4)) for _ in range(4)])
         st.session_state.coins -= 480
-        st.session_state.queue_active = False
-        st.success(f"SUCCESS! Your Code: {new_code}")
+        st.session_state.in_queue = False
+        st.balloons()
+        st.success(f"SUCCESS! Your Redeem Code: **{code}**")
