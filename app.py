@@ -1,121 +1,124 @@
 import streamlit as st
 import streamlit.components.v1 as components
 import time
+import random
+import string
 
-# --- CONFIG & INJECTION ---
-st.set_page_config(page_title="Mango Wallet", page_icon="🥭")
+# --- CONFIG ---
+st.set_page_config(page_title="Mango Wallet", page_icon="🥭", layout="centered")
 
-# Inject verification tag
-components.html(
-    """<script>
-    const h = window.parent.document.getElementsByTagName('head')[0];
-    const m = window.parent.document.createElement('meta');
-    m.name = "monetag"; m.content = "c471f3c94592e8b071ac6eaf7f6f2397";
-    h.appendChild(m);
-    </script>""", height=0
-)
+# --- INITIALIZE STATE ---
+if 'coins' not in st.session_state: st.session_state.coins = 0
+if 'queue_active' not in st.session_state: st.session_state.queue_active = False
+if 'redeem_done' not in st.session_state: st.session_state.redeem_done = False
 
-# Initialize Session State
-if 'coins' not in st.session_state:
-    st.session_state.coins = 0
-if 'show_timer' not in st.session_state:
-    st.session_state.show_timer = False
-
-# --- SIDEBAR ---
-st.sidebar.title("💰 Rewards Center")
-st.sidebar.metric("Your Coins", f"{st.session_state.coins} 🥭")
-st.sidebar.write(f"Value: **₹{(st.session_state.coins / 480 * 10):.2f}**")
-
-# --- AD & TIMER LOGIC ---
-if st.session_state.show_timer:
-    st.warning("🎮 Processing Game Results...")
-    placeholder = st.empty()
-    for i in range(10, 0, -1):
-        placeholder.metric("Adding Coins in...", f("{i}s"))
-        time.sleep(1)
+# 1. VERIFICATION CHECK
+# If user comes from Netlify with ?verified=true, they get 10 coins.
+if st.query_params.get("verified") == "true":
     st.session_state.coins += 10
-    st.session_state.show_timer = False
-    st.success("✅ 10 Coins Added!")
-    st.rerun()
+    st.query_params.clear() # Prevents refresh-cheating
+    st.success("💰 +10 Coins added to your wallet!")
 
-tab1, tab2 = st.tabs(["🎮 Play Mango", "🏦 Withdraw Cash"])
+# --- UI TABS ---
+tab1, tab2 = st.tabs(["🎮 Play Mango", "🏦 Withdraw"])
 
 with tab1:
-    st.header("The Mango Challenge")
-    st.write("Catch **10 Small Mangoes** to win!")
-
-    # Game Logic with Pause Feature
-    game_html = """
-    <div id="game" style="width:100%; height:300px; background:#bae6fd; position:relative; overflow:hidden; border-radius:15px; border:3px solid #0369a1;">
-        <div id="basket" style="width:60px; height:25px; background:#713f12; position:absolute; bottom:5px; left:50%; border-radius:5px;"></div>
-        <div id="score" style="position:absolute; top:10px; left:10px; font-family:sans-serif; font-weight:bold;">Caught: 0</div>
+    st.header("The 10 Mango Challenge")
+    st.write("Catch **10 Small Mangoes**. If you miss 3, you're out!")
+    
+    # The Game pauses automatically when you switch to Tab 2
+    game_js = """
+    <div id="g" style="width:100%; height:320px; background:#e0f2fe; position:relative; overflow:hidden; border-radius:15px; border:2px solid #0369a1;">
+        <div id="b" style="width:50px; height:15px; background:#451a03; position:absolute; bottom:5px; left:50%; border-radius:3px;"></div>
+        <div id="sc" style="position:absolute; top:10px; left:10px; font-weight:bold; color:#0369a1;">Mangoes: 0</div>
     </div>
     <script>
-        let score = 0; let missed = 0; let basketX = 150;
-        const area = document.getElementById('game');
-        const basket = document.getElementById('basket');
-        const scoreDisp = document.getElementById('score');
+        let s = 0; let m = 0; let bx = 150;
+        const g = document.getElementById('g');
+        const b = document.getElementById('b');
+        const sc = document.getElementById('sc');
 
-        // Move Basket
         window.addEventListener('mousemove', (e) => {
-            let rect = area.getBoundingClientRect();
-            basketX = e.clientX - rect.left - 30;
-            basket.style.left = basketX + 'px';
+            let r = g.getBoundingClientRect();
+            bx = e.clientX - r.left - 25;
+            b.style.left = bx + 'px';
         });
 
-        function createMango() {
-            // THE GAME ONLY RUNS IF TAB1 IS ACTIVE
-            const m = document.createElement('div');
-            m.innerHTML = "🥭"; 
-            m.style.position = "absolute"; 
-            m.style.fontSize = "18px"; // SMALLER MANGOES
-            m.style.left = Math.random() * (area.clientWidth - 20) + "px";
-            m.style.top = "-30px";
-            area.appendChild(m);
+        function spawn() {
+            const mango = document.createElement('div');
+            mango.innerHTML = "🥭"; mango.style.position = "absolute"; 
+            mango.style.top = "-20px"; mango.style.fontSize = "16px"; // Small Mangoes
+            mango.style.left = Math.random() * 90 + "%";
+            g.appendChild(mango);
 
             let fall = setInterval(() => {
-                let top = parseInt(m.style.top);
-                if (top > 260 && parseInt(m.style.left) > basketX - 10 && parseInt(m.style.left) < basketX + 50) {
-                    score++; scoreDisp.innerText = "Caught: " + score;
-                    m.remove(); clearInterval(fall);
-                    if(score >= 10) { 
-                        alert("WIN! Watch ad to claim coins."); 
+                let t = parseInt(mango.style.top);
+                mango.style.top = (t + 7) + "px"; // Fast Falling
+                
+                // Hit detection
+                if(t > 290 && Math.abs(parseInt(mango.style.left) - bx) < 40) {
+                    s++; sc.innerText = "Mangoes: " + s;
+                    mango.remove(); clearInterval(fall);
+                    if(s >= 10) { 
+                        alert("WIN! Redirecting to verify..."); 
                         window.parent.location.href = "https://effulgent-sawine-4ed08c.netlify.app/"; 
                     }
-                } else if (top > 300) {
-                    missed++; m.remove(); clearInterval(fall);
-                    if(missed >= 3) { 
-                        alert("FAIL! Restarting Ad loop..."); 
+                } else if(t > 320) {
+                    m++; mango.remove(); clearInterval(fall);
+                    if(m >= 3) { 
+                        alert("FAILED! Try again."); 
                         window.parent.location.href = "https://effulgent-sawine-4ed08c.netlify.app/"; 
                     }
-                } else { m.style.top = (top + 6) + "px"; }
+                }
             }, 30);
         }
-        
-        // Game Speed
-        let gameLoop = setInterval(createMango, 1000);
+        setInterval(spawn, 900);
     </script>
     """
-    components.html(game_html, height=350)
-    
-    if st.button("I Finished the Ad (Claim Coins)"):
-        st.session_state.show_timer = True
-        st.rerun()
+    if not st.session_state.queue_active:
+        components.html(game_js, height=350)
+    else:
+        st.info("Game paused while withdrawal is in progress.")
 
 with tab2:
-    st.header("Withdrawal")
-    # THE GAME IS AUTOMATICALLY PAUSED HERE BECAUSE THE HTML COMPONENT 
-    # IS ONLY RENDERED IN TAB 1
-    st.info("Game is paused while you are in the Wallet.")
+    st.header("Withdrawal Center")
+    st.sidebar.metric("Your Balance", f"{st.session_state.coins} 🥭")
     
-    method = st.selectbox("Payment Method", ["UPI", "PhonePe", "GPay", "PayPal", "Redeem Code"])
-    amount = st.number_input("Amount to Withdraw (INR)", min_value=10, step=10)
-    required_coins = (amount / 10) * 480
-    
-    st.write(f"Required Coins: **{int(required_coins)} 🥭**")
-    
-    if st.button("CONFIRM WITHDRAWAL"):
-        if st.session_state.coins < required_coins:
-            st.error(f"Insufficient Coins! You need {int(required_coins - st.session_state.coins)} more.")
-        else:
-            st.error("❌ Maintenance: System Busy. Try again later.")
+    if not st.session_state.queue_active and not st.session_state.redeem_done:
+        st.write("Redeem **480 Coins** for a **₹10 Google Play Code**.")
+        method = st.selectbox("Select Method", ["Google Play Code", "UPI", "Amazon Pay"])
+        
+        if st.button("REDEEM NOW"):
+            if st.session_state.coins < 480:
+                st.error("Insufficient Coins! You need 480.")
+            else:
+                st.session_state.queue_active = True
+                st.rerun()
+
+    # QUEUE LOGIC
+    if st.session_state.queue_active:
+        st.warning("⏳ Order processing... You are #4 in queue.")
+        st.write("Please wait **2 minutes** for your code to generate.")
+        
+        progress_bar = st.progress(0)
+        status_text = st.empty()
+        
+        for percent_complete in range(100):
+            time.sleep(1.2) # Roughly 120 seconds total (2 mins)
+            progress_bar.progress(percent_complete + 1)
+            status_text.text(f"Queue Progress: {percent_complete + 1}%")
+            
+        # Code Generation
+        new_code = '-'.join([''.join(random.choices(string.ascii_uppercase + string.digits, k=4)) for _ in range(4)])
+        st.session_state.coins -= 480
+        st.session_state.queue_active = False
+        st.session_state.redeem_done = True
+        st.session_state.final_code = new_code
+        st.rerun()
+
+    if st.session_state.redeem_done:
+        st.balloons()
+        st.success(f"SUCCESS! Your Redeem Code is: **{st.session_state.final_code}**")
+        if st.button("Back to Game"):
+            st.session_state.redeem_done = False
+            st.rerun()
