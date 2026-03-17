@@ -7,7 +7,7 @@ import random
 import string
 
 # --- APP CONFIG ---
-st.set_page_config(page_title="Mango Wallet", page_icon="🥭")
+st.set_page_config(page_title="Mango Wallet", page_icon="🥭", layout="centered")
 
 # --- DATABASE LOGIC ---
 DB_FILE = "users.csv"
@@ -20,10 +20,8 @@ def get_users():
 def save_user_data(u, p, c):
     df = get_users()
     if u in df['username'].values:
-        # Update coins for existing user
         df.loc[df['username'] == u, 'coins'] = c
     else:
-        # Create brand new user
         new_row = pd.DataFrame([{"username": u, "password": str(p), "coins": c}])
         df = pd.concat([df, new_row], ignore_index=True)
     df.to_csv(DB_FILE, index=False)
@@ -35,8 +33,6 @@ if 'coins' not in st.session_state: st.session_state.coins = 0
 # --- AUTHENTICATION ---
 if st.session_state.user is None:
     st.title("🥭 Mango Wallet")
-    st.write("Join the challenge and earn real rewards!")
-    
     t1, t2 = st.tabs(["Login", "Sign Up"])
     
     with t1:
@@ -44,61 +40,52 @@ if st.session_state.user is None:
         p_log = st.text_input("Password", type="password", key="l_p")
         if st.button("Login"):
             df = get_users()
-            # Convert both to string to avoid math-related login errors
             match = df[(df['username'] == u_log) & (df['password'].astype(str) == str(p_log))]
             if not match.empty:
                 st.session_state.user = u_log
                 st.session_state.coins = int(match.iloc[0]['coins'])
                 st.rerun()
             else:
-                st.error("❌ Wrong details. Check your password again.")
+                st.error("❌ Invalid Login")
 
     with t2:
         u_sign = st.text_input("New Username", key="s_u")
         p_sign = st.text_input("New Password", type="password", key="s_p")
         if st.button("Create Account"):
             df = get_users()
-            if u_sign in df['username'].values:
-                st.warning("Username taken!")
-            elif u_sign and p_sign:
+            if u_sign and p_sign:
                 save_user_data(u_sign, p_sign, 0)
-                st.success("✅ Success! Please Login.")
-            else:
-                st.error("Fill both boxes!")
+                st.success("✅ Account Created! Please Login.")
     st.stop()
 
-# --- LOGGED IN UI ---
+# --- DASHBOARD ---
 st.sidebar.title(f"👤 {st.session_state.user}")
-st.sidebar.metric("Your Balance", f"{st.session_state.coins} 🥭")
+st.sidebar.metric("Coins", f"{st.session_state.coins} 🥭")
 
-if st.sidebar.button("Logout"):
-    st.session_state.user = None
-    st.rerun()
-
-# Capture teleport back from Netlify
+# Capture Redirect Back
 if st.query_params.get("verified") == "true":
     st.session_state.coins += 10
     save_user_data(st.session_state.user, "", st.session_state.coins)
     st.query_params.clear()
-    st.toast("💰 +10 Coins Added!")
     st.balloons()
+    st.toast("💰 +10 Coins Added!")
 
 tab_game, tab_draw = st.tabs(["🎮 Play Game", "🏦 Withdraw"])
 
 with tab_game:
-    st.subheader("Catch 10 Mangoes!")
-    
-    # THE GAME COMPONENT WITH FORCED REDIRECT FIX
+    # THE GAME COMPONENT (TELEPORT FIX)
     game_html = """
     <div id="game" style="width:100%; height:350px; background:#e0f2fe; position:relative; overflow:hidden; border-radius:15px; border:3px solid #0369a1;">
         <div id="basket" style="width:75px; height:25px; background:#451a03; position:absolute; bottom:10px; left:50%; border-radius:5px;"></div>
         <div id="score" style="position:absolute; top:10px; left:10px; font-weight:bold; font-size:20px; color:#0369a1;">Score: 0</div>
+        <div id="msg" style="position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); font-size:30px; font-weight:bold; display:none; color:red; text-align:center;"></div>
     </div>
     <script>
         let s = 0; let m = 0;
         const g = document.getElementById('game');
         const b = document.getElementById('basket');
         const sc = document.getElementById('score');
+        const msg = document.getElementById('msg');
         const lobby = "https://merry-peony-d69278.netlify.app/";
 
         window.addEventListener('mousemove', (e) => {
@@ -116,7 +103,7 @@ with tab_game:
 
             let fall = setInterval(() => {
                 let t = parseInt(mango.style.top);
-                mango.style.top = (t + 3) + "px"; // Slow speed
+                mango.style.top = (t + 3) + "px";
 
                 let mR = mango.getBoundingClientRect();
                 let bR = b.getBoundingClientRect();
@@ -125,17 +112,17 @@ with tab_game:
                     s++; sc.innerText = "Score: " + s;
                     mango.remove(); clearInterval(fall);
                     if(s >= 10) { 
-                        alert("WIN! Teleporting to Lobby..."); 
-                        // FORCED REDIRECT FIX
-                        window.parent.location.href = lobby; 
+                        msg.innerText = "WIN! Teleporting...";
+                        msg.style.display = "block";
+                        setTimeout(() => { window.parent.location.href = lobby; }, 1000);
                     }
                 }
                 if(t > 330) {
                     m++; mango.remove(); clearInterval(fall);
                     if(m >= 3) { 
-                        alert("FAILED! Redirecting..."); 
-                        // FORCED REDIRECT FIX
-                        window.parent.location.href = lobby; 
+                        msg.innerText = "FAILED! Redirecting...";
+                        msg.style.display = "block";
+                        setTimeout(() => { window.parent.location.href = lobby; }, 1000);
                     }
                 }
             }, 30);
@@ -146,10 +133,10 @@ with tab_game:
     components.html(game_html, height=400)
 
 with tab_draw:
-    st.header("Withdraw Rewards")
+    st.header("Withdraw")
     if st.button("Redeem ₹10 (480 Coins)"):
         if st.session_state.coins >= 480:
-            st.warning("⏳ Order processing... Wait 2 minutes.")
+            st.warning("⏳ Please wait 2 minutes for processing...")
             p = st.progress(0)
             for i in range(120):
                 time.sleep(1)
@@ -158,5 +145,3 @@ with tab_draw:
             st.session_state.coins -= 480
             save_user_data(st.session_state.user, "", st.session_state.coins)
             st.success(f"SUCCESS! Code: {code}")
-        else:
-            st.error(f"You need {480 - st.session_state.coins} more coins.")
